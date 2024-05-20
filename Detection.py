@@ -14,6 +14,8 @@ from detectron2.data.datasets import register_coco_instances
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.visualizer import Visualizer, ColorMode
 from detectron2.data import MetadataCatalog, DatasetCatalog
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader
 import matplotlib.pyplot as plt
 import random
 import torch
@@ -23,6 +25,7 @@ from albumentations.pytorch import ToTensorV2
 from detectron2.data import detection_utils as utils
 from detectron2.data import DatasetMapper, build_detection_train_loader
 from docx import Document
+import docx
 
 # Set the sharing strategy to 'file_system'
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -382,7 +385,7 @@ doc.add_heading('Inference Results', level=1)
 
 # Display results for 5 random images and save to the document
 results_table = []
-for d in random.sample(dataset_dicts, 5):
+for d in random.sample(dataset_dicts, 10):
     im = cv2.imread(d["file_name"])
     outputs = predictor(im)
     instances = outputs["instances"].to("cpu")
@@ -439,3 +442,8 @@ final_f1 = f1_score(y_true, y_pred, average='weighted')
 final_accuracy = accuracy_score(y_true, y_pred)
 print(f"Final F1 Score: {final_f1}")
 print(f"Final Accuracy: {final_accuracy}")
+
+# Evaluation with COCO Evaluator
+evaluator = COCOEvaluator("my_dataset_val", cfg, False, output_dir="./output/")
+val_loader = build_detection_test_loader(cfg, "my_dataset_val")
+inference_on_dataset(trainer.model, val_loader, evaluator)
