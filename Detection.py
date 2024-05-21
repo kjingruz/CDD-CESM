@@ -383,7 +383,7 @@ print(f"Best threshold: {best_threshold}")
 doc = Document()
 doc.add_heading('Inference Results', level=1)
 
-# Display results for 5 random images and save to the document
+# Display results for 10 random images and save to the document
 results_table = []
 for d in random.sample(dataset_dicts, 10):
     im = cv2.imread(d["file_name"])
