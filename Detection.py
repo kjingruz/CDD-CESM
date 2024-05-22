@@ -20,12 +20,11 @@ import matplotlib.pyplot as plt
 import random
 import torch
 import copy
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
+import imgaug.augmenters as iaa
 from detectron2.data import detection_utils as utils
 from detectron2.data import DatasetMapper, build_detection_train_loader
-from docx import Document
-import docx
+from sklearn.metrics import f1_score, accuracy_score
+import time
 
 # Set the sharing strategy to 'file_system'
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -256,38 +255,31 @@ register_coco_instances("my_dataset_val", {}, "./data/valid/_annotations.coco.js
 # Set up the logger
 setup_logger()
 
-# Define Albumentations augmentations
-def get_albumentations_transforms():
-    return A.Compose([
-        A.Rotate(limit=45, p=0.5),  # Rotate the image by up to 45 degrees
-        A.HorizontalFlip(p=0.5),    # Horizontally flip the image
-        A.VerticalFlip(p=0.5),      # Vertically flip the image
-        A.RandomBrightnessContrast(p=0.5),  # Randomly change the brightness and contrast
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.5),
-        A.OneOf([
-            A.HueSaturationValue(10,15,10),
-            A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3)
-        ], p=0.5),
-        A.MotionBlur(blur_limit=3, p=0.2),
-        A.IAAPerspective(scale=(0.02, 0.05), p=0.3),
-        A.Cutout(num_holes=8, max_h_size=8, max_w_size=8, p=0.3),
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2()
+# Define imgaug augmentations
+def get_imgaug_transforms():
+    return iaa.Sequential([
+        iaa.Rotate((-45, 45)),  # Rotate the image by up to 45 degrees
+        iaa.Fliplr(0.5),    # Horizontally flip the image
+        iaa.Flipud(0.5),    # Vertically flip the image
+        iaa.Multiply((0.8, 1.2)),  # Randomly change the brightness
+        iaa.LinearContrast((0.8, 1.2)),  # Randomly change the contrast
+        iaa.Affine(scale=(0.8, 1.2), translate_percent=(-0.2, 0.2), rotate=(-45, 45))
     ])
 
-# Define Albumentations Mapper
-class AlbumentationsMapper(DatasetMapper):
+# Define imgaug Mapper
+class ImgaugMapper(DatasetMapper):
     def __init__(self, cfg, is_train=True):
         super().__init__(cfg, is_train)
-        self.augmentations = get_albumentations_transforms()
+        self.augmentations = get_imgaug_transforms()
+        self.img_format = cfg.INPUT.FORMAT
 
     def __call__(self, dataset_dict):
         dataset_dict = copy.deepcopy(dataset_dict)
         image = utils.read_image(dataset_dict["file_name"], format=self.img_format)
         aug_output = self.augmentations(image=image)
-        image = aug_output["image"]
+        image = aug_output.astype("float32")
 
-        dataset_dict["image"] = torch.as_tensor(image.transpose(2, 0, 1).astype("float32"))
+        dataset_dict["image"] = torch.as_tensor(image.transpose(2, 0, 1))
 
         annos = [utils.transform_instance_annotations(annotation, [], image.shape[:2])
                  for annotation in dataset_dict.pop("annotations")]
@@ -295,11 +287,11 @@ class AlbumentationsMapper(DatasetMapper):
         dataset_dict["instances"] = utils.filter_empty_instances(instances)
         return dataset_dict
 
-# Define Custom Trainer with Albumentations
+# Define Custom Trainer with imgaug
 class TrainerWithCustomLoader(DefaultTrainer):
     @classmethod
     def build_train_loader(cls, cfg):
-        return build_detection_train_loader(cfg, mapper=AlbumentationsMapper(cfg, is_train=True))
+        return build_detection_train_loader(cfg, mapper=ImgaugMapper(cfg, is_train=True))
 
 # Configuration setup
 cfg = get_cfg()
@@ -331,99 +323,52 @@ predictor = DefaultPredictor(cfg)
 dataset_dicts = DatasetCatalog.get("my_dataset_val")
 metadata = MetadataCatalog.get("my_dataset_val")
 
-# Function to calculate metrics and find the best threshold
-def calculate_metrics_and_find_best_threshold(predictor, dataset_dicts, metadata):
-    thresholds = np.arange(0.1, 1.0, 0.1)
-    best_threshold = 0.5
-    best_f1 = 0.0
+# Define the function to get class name from class id
+def get_class_name_from_id(class_id):
+    if class_id == 0:
+        return 'Benign'
+    elif class_id == 1:
+        return 'Malignant'
+    elif class_id == 2:
+        return 'Normal'
+    else:
+        return 'Unknown'
 
-    results = []
-
-    for threshold in thresholds:
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = float(threshold)
-        predictor = DefaultPredictor(cfg)
-
-        y_true = []
-        y_pred = []
-
-        for d in dataset_dicts:
-            im = cv2.imread(d["file_name"])
-            outputs = predictor(im)
-            instances = outputs["instances"].to("cpu")
-            classes = instances.pred_classes.tolist()
-            scores = instances.scores.tolist()
-
-            for class_id, score in zip(classes, scores):
-                y_pred.append(class_id)
-                y_true.append(d['annotations'][0]['category_id'])
-
-        f1 = f1_score(y_true, y_pred, average='weighted')
-        accuracy = accuracy_score(y_true, y_pred)
-
-        results.append({
-            'Threshold': float(threshold),
-            'F1 Score': f1,
-            'Accuracy': accuracy
-        })
-
-        if f1 > best_f1:
-            best_f1 = f1
-            best_threshold = float(threshold)
-
-    return best_threshold, results
-
-# Calculate metrics and find the best threshold
-best_threshold, results = calculate_metrics_and_find_best_threshold(predictor, dataset_dicts, metadata)
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = best_threshold
-predictor = DefaultPredictor(cfg)
-
-print(f"Best threshold: {best_threshold}")
-
-# Create a Word document to store results
-doc = Document()
-doc.add_heading('Inference Results', level=1)
-
-# Display results for 10 random images and save to the document
-results_table = []
-for d in random.sample(dataset_dicts, 10):
+# Visualize the results
+results_dir = './data/results'
+os.makedirs(results_dir, exist_ok=True)
+sampled_dicts = random.sample(dataset_dicts, min(len(dataset_dicts), 20))
+for d in sampled_dicts:
     im = cv2.imread(d["file_name"])
     outputs = predictor(im)
     instances = outputs["instances"].to("cpu")
-    classes = instances.pred_classes.tolist()
-    scores = instances.scores.tolist()
 
-    # Store predictions and ground truth
-    ground_truth_class = d['annotations'][0]['category_id']
-    predicted_class = classes[0] if classes else 'None'
-    predicted_score = scores[0] if scores else 'None'
-    results_table.append([d["file_name"], ground_truth_class, predicted_class, predicted_score])
+    # Filter out low confidence predictions
+    high_conf_instances = instances[instances.scores >= 0.7]
 
-    # Modify Visualizer to display classification
-    v = Visualizer(im[:, :, ::-1], metadata=metadata, scale=0.8)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    
-    # Save the image with predictions
-    result_image_path = f'./data/results/{os.path.basename(d["file_name"])}'
-    os.makedirs(os.path.dirname(result_image_path), exist_ok=True)
-    cv2.imwrite(result_image_path, out.get_image()[:, :, ::-1])
-    
-    # Add the result to the document
-    doc.add_heading(f'Image: {d["file_name"]}', level=2)
-    doc.add_paragraph(f'Ground Truth: {ground_truth_class}')
-    doc.add_paragraph(f'Predicted Class: {predicted_class}')
-    doc.add_paragraph(f'Predicted Score: {predicted_score}')
-    doc.add_picture(result_image_path, width=docx.shared.Inches(4))
+    v = Visualizer(im.copy(), metadata=metadata, scale=0.5)
+    out_pred = v.draw_instance_predictions(high_conf_instances)
 
-# Save the document
-doc.save('./data/results/inference_results.docx')
+    # Draw ground truth on the original image
+    v = Visualizer(im.copy(), metadata=metadata, scale=0.5)
+    out_gt = v.draw_dataset_dict(d)
 
-# Convert results to DataFrame and display
-results_df = pd.DataFrame(results_table, columns=["File Name", "Ground Truth", "Predicted Class", "Predicted Score"])
-print(results_df)
+    # Get ground truth and predicted class names
+    ground_truth_class_name = get_class_name_from_id(d['annotations'][0]['category_id']) if d['annotations'] else 'None'
+    predicted_class_name = get_class_name_from_id(instances.pred_classes[0].item()) if len(instances) > 0 else 'None'
 
-# Display the evaluation results
-eval_df = pd.DataFrame(results)
-print(eval_df)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+    ax1.imshow(out_gt.get_image()[:, :, ::-1])
+    ax1.set_title(f"Ground Truth: {ground_truth_class_name}")
+    ax1.axis('off')
+
+    ax2.imshow(out_pred.get_image()[:, :, ::-1])
+    ax2.set_title(f"Predicted: {predicted_class_name}")
+    ax2.axis('off')
+
+    result_image_path = os.path.join(results_dir, os.path.basename(d["file_name"]))
+    plt.savefig(result_image_path)
+    plt.close()
 
 # Calculate the overall F1 score and accuracy with the best threshold
 y_true = []
@@ -433,10 +378,12 @@ for d in dataset_dicts:
     outputs = predictor(im)
     instances = outputs["instances"].to("cpu")
     classes = instances.pred_classes.tolist()
+    scores = instances.scores.tolist()
 
-    for class_id in classes:
-        y_pred.append(class_id)
-        y_true.append(d['annotations'][0]['category_id'])
+    for class_id, score in zip(classes, scores):
+        if score >= 0.7:  # Filter out low confidence predictions
+            y_pred.append(class_id)
+            y_true.append(d['annotations'][0]['category_id'])
 
 final_f1 = f1_score(y_true, y_pred, average='weighted')
 final_accuracy = accuracy_score(y_true, y_pred)
@@ -445,5 +392,7 @@ print(f"Final Accuracy: {final_accuracy}")
 
 # Evaluation with COCO Evaluator
 evaluator = COCOEvaluator("my_dataset_val", cfg, False, output_dir="./output/")
-val_loader = build_detection_test_loader(cfg, "my_dataset_val")
+val_loader = build_detection_test_loader(cfg, "my_dataset_val", num_workers=0)  # Disable multiprocessing
 inference_on_dataset(trainer.model, val_loader, evaluator)
+
+print(f"Total execution time: {time.time() - start_time} seconds")
