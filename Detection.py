@@ -7,45 +7,25 @@ import json
 import cv2
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit
-from detectron2.engine import DefaultTrainer, DefaultPredictor
+from detectron2.engine import DefaultTrainer
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.data.datasets import register_coco_instances
 from detectron2.utils.logger import setup_logger
-from detectron2.utils.visualizer import Visualizer, ColorMode
 from detectron2.data import MetadataCatalog, DatasetCatalog
-from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-from detectron2.data import build_detection_test_loader
-import matplotlib.pyplot as plt
-import random
 import torch
 import copy
 import imgaug.augmenters as iaa
 from detectron2.data import detection_utils as utils
 from detectron2.data import DatasetMapper, build_detection_train_loader
-from sklearn.metrics import f1_score, accuracy_score
 import time
 
 # Set the sharing strategy to 'file_system'
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-# Function to draw annotations on images and get image dimensions
-def draw_annotations_and_get_dimensions(image_path, annotations, classification):
-    image = cv2.imread(image_path)
-    height, width = image.shape[:2]
-    for annotation in annotations:
-        points = list(zip(annotation['all_points_x'], annotation['all_points_y']))
-        points = np.array(points, np.int32)
-        points = points.reshape((-1, 1, 2))
-        cv2.polylines(image, [points], isClosed=True, color=(255, 0, 0), thickness=2)
-    
-    cv2.putText(image, classification, (10, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    return image, width, height
-
-# Load the annotations from the CSV file
+# Load and prepare annotations and classifications (this part is unchanged)
 segmentation_file = './data/Radiology_hand_drawn_segmentations_v2.csv'
 annotations = []
-
 with open(segmentation_file, newline='') as csvfile:
     reader = csv.DictReader(csvfile)
     for row in reader:
@@ -59,21 +39,17 @@ with open(segmentation_file, newline='') as csvfile:
                 }
             })
 
-# Group annotations by filename
 annotations_by_filename = {}
 for annotation in annotations:
     if annotation['filename'] not in annotations_by_filename:
         annotations_by_filename[annotation['filename']] = []
     annotations_by_filename[annotation['filename']].append(annotation['points'])
 
-# Get the list of annotated images
 annotated_images = list(annotations_by_filename.keys())
 
-# Load the Excel file for classifications
 annotations_file = './data/Radiology-manual-annotations.xlsx'
 df_annotations = pd.read_excel(annotations_file)
 
-# Classify images based on the annotations
 def classify_images(df):
     classifications = {}
     for index, row in df.iterrows():
@@ -89,13 +65,10 @@ def classify_images(df):
     
     return classifications
 
-# Get the classifications
 classifications = classify_images(df_annotations)
 
-# Ensure directories exist
 os.makedirs('./data/annotated_images', exist_ok=True)
 
-# Annotate images, save them, and collect their dimensions
 images_info = []
 annotations_info = []
 category_id = 1  # Assuming one category for simplicity
@@ -104,18 +77,9 @@ for filename, points in annotations_by_filename.items():
     image_path = f'./data/images/{filename}'
     if os.path.exists(image_path):
         classification = classifications.get(os.path.splitext(filename)[0], 'Normal')
-        image_with_annotations, width, height = draw_annotations_and_get_dimensions(image_path, points, classification)
         annotated_image_path = f'./data/annotated_images/{filename}'
-        cv2.imwrite(annotated_image_path, image_with_annotations)
-        
-        image_id = len(images_info) + 1
-        images_info.append({
-            "id": image_id,
-            "file_name": filename,
-            "width": int(width),  # Convert to int
-            "height": int(height)  # Convert to int
-        })
-        
+        image = cv2.imread(image_path)
+        height, width = image.shape[:2]
         for annotation in points:
             all_points_x = annotation['all_points_x']
             all_points_y = annotation['all_points_y']
@@ -126,46 +90,43 @@ for filename, points in annotations_by_filename.items():
                 
                 annotations_info.append({
                     "id": len(annotations_info) + 1,
-                    "image_id": image_id,
+                    "image_id": len(images_info) + 1,
                     "category_id": category_id,
                     "segmentation": segmentation,
                     "area": area,
                     "bbox": bbox,
                     "iscrowd": 0
                 })
+        images_info.append({
+            "id": len(images_info) + 1,
+            "file_name": filename,
+            "width": int(width),
+            "height": int(height)
+        })
+        cv2.imwrite(annotated_image_path, image)
 
-categories_info = [{
-    "id": category_id,
-    "name": "Lesion"  # Change this to the actual category name
-}]
+categories_info = [{"id": category_id, "name": "Lesion"}]
 
-# Get all images including normal ones
 all_images = [f for f in os.listdir('./data/images') if f.endswith(('.jpg', '.jpeg'))]
-
-# Include normal images
 for image_file in all_images:
     if image_file not in annotated_images:
         image_path = f'./data/images/{image_file}'
         if os.path.exists(image_path):
             image = cv2.imread(image_path)
             height, width = image.shape[:2]
-            
-            image_id = len(images_info) + 1
             images_info.append({
-                "id": image_id,
+                "id": len(images_info) + 1,
                 "file_name": image_file,
-                "width": int(width),  # Convert to int
-                "height": int(height)  # Convert to int
+                "width": int(width),
+                "height": int(height)
             })
 
-# Create the COCO JSON annotation file
 coco_annotation = {
     "images": images_info,
     "annotations": annotations_info,
     "categories": categories_info
 }
 
-# Ensure all numpy types are converted to native Python types
 def convert_to_native_types(data):
     if isinstance(data, list):
         return [convert_to_native_types(item) for item in data]
@@ -181,7 +142,6 @@ coco_annotation = convert_to_native_types(coco_annotation)
 with open('./data/annotated_images/annotations.json', 'w') as f:
     json.dump(coco_annotation, f)
 
-# Split the images into train and test sets
 patient_groups = {}
 for image_info in images_info:
     patient_id = image_info['file_name'].split('_')[0]
@@ -199,7 +159,6 @@ test_patient_ids = [patient_ids[idx] for idx in test_idx]
 train_images = [img for pid in train_patient_ids for img in patient_groups[pid]]
 test_images = [img for pid in test_patient_ids for img in patient_groups[pid]]
 
-# Create new COCO JSON files for train and test sets
 def create_coco_json(images, annotations, categories, dest_file):
     image_ids = [img['id'] for img in images]
     filtered_annotations = [anno for anno in annotations if anno['image_id'] in image_ids]
@@ -208,19 +167,16 @@ def create_coco_json(images, annotations, categories, dest_file):
         "annotations": filtered_annotations,
         "categories": categories
     }
-    coco_data = convert_to_native_types(coco_data)  # Convert to native types before saving
+    coco_data = convert_to_native_types(coco_data)
     with open(dest_file, 'w') as f:
         json.dump(coco_data, f)
 
-# Ensure the destination directories exist
 os.makedirs('./data/train', exist_ok=True)
 os.makedirs('./data/valid', exist_ok=True)
 
-# Create train and test COCO JSON files
 create_coco_json(train_images, annotations_info, categories_info, './data/train/_annotations.coco.json')
 create_coco_json(test_images, annotations_info, categories_info, './data/valid/_annotations.coco.json')
 
-# Move the train and test images to their respective directories
 def move_files(images, src_folder, dest_folder):
     os.makedirs(dest_folder, exist_ok=True)
     for img in images:
@@ -231,46 +187,41 @@ def move_files(images, src_folder, dest_folder):
 move_files(train_images, './data/images', './data/train')
 move_files(test_images, './data/images', './data/valid')
 
-# Count the number of each type in train and test sets
 train_counts = {'Benign': 0, 'Malignant': 0, 'Normal': 0}
 test_counts = {'Benign': 0, 'Malignant': 0, 'Normal': 0}
 
 for image in train_images:
-    image_name = os.path.splitext(image['file_name'])[0]  # Get the image name without extension
+    image_name = os.path.splitext(image['file_name'])[0]
     classification = classifications.get(image_name, 'Normal')
     train_counts[classification] += 1
 
 for image in test_images:
-    image_name = os.path.splitext(image['file_name'])[0]  # Get the image name without extension
+    image_name = os.path.splitext(image['file_name'])[0]
     classification = classifications.get(image_name, 'Normal')
     test_counts[classification] += 1
 
 print("Train counts:", train_counts)
 print("Test counts:", test_counts)
 
-# Register datasets
 register_coco_instances("my_dataset_train", {}, "./data/train/_annotations.coco.json", "./data/train")
 register_coco_instances("my_dataset_val", {}, "./data/valid/_annotations.coco.json", "./data/valid")
 
-# Set up the logger
 setup_logger()
 
-# Define imgaug augmentations
 def get_imgaug_transforms():
     return iaa.Sequential([
-        iaa.Rotate((-45, 45)),  # Rotate the image by up to 45 degrees
-        iaa.Fliplr(0.5),    # Horizontally flip the image
-        iaa.Flipud(0.5),    # Vertically flip the image
-        iaa.Multiply((0.8, 1.2)),  # Randomly change the brightness
-        iaa.LinearContrast((0.8, 1.2)),  # Randomly change the contrast
+        iaa.Rotate((-45, 45)),
+        iaa.Fliplr(0.5),
+        iaa.Flipud(0.5),
+        iaa.Multiply((0.8, 1.2)),
+        iaa.LinearContrast((0.8, 1.2)),
         iaa.Affine(scale=(0.8, 1.2), translate_percent=(-0.2, 0.2), rotate=(-45, 45))
     ])
 
-# Define imgaug Mapper
 class ImgaugMapper(DatasetMapper):
     def __init__(self, cfg, is_train=True):
         super().__init__(cfg, is_train)
-        self.augmentations = get_imgaug_transforms()
+        self.augmentations = get_imgaug_transforms
         self.img_format = cfg.INPUT.FORMAT
 
     def __call__(self, dataset_dict):
@@ -314,85 +265,5 @@ trainer = TrainerWithCustomLoader(cfg)
 trainer.resume_or_load(resume=False)
 trainer.train()
 
-# Perform inference with the trained model
+# Save the trained model weights
 cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
-predictor = DefaultPredictor(cfg)
-
-# Load the dataset
-dataset_dicts = DatasetCatalog.get("my_dataset_val")
-metadata = MetadataCatalog.get("my_dataset_val")
-
-# Define the function to get class name from class id
-def get_class_name_from_id(class_id):
-    if class_id == 0:
-        return 'Benign'
-    elif class_id == 1:
-        return 'Malignant'
-    elif class_id == 2:
-        return 'Normal'
-    else:
-        return 'Unknown'
-
-# Visualize the results
-results_dir = './data/results'
-os.makedirs(results_dir, exist_ok=True)
-sampled_dicts = random.sample(dataset_dicts, min(len(dataset_dicts), 20))
-for d in sampled_dicts:
-    im = cv2.imread(d["file_name"])
-    outputs = predictor(im)
-    instances = outputs["instances"].to("cpu")
-
-    # Filter out low confidence predictions
-    high_conf_instances = instances[instances.scores >= 0.7]
-
-    v = Visualizer(im.copy(), metadata=metadata, scale=0.5)
-    out_pred = v.draw_instance_predictions(high_conf_instances)
-
-    # Draw ground truth on the original image
-    v = Visualizer(im.copy(), metadata=metadata, scale=0.5)
-    out_gt = v.draw_dataset_dict(d)
-
-    # Get ground truth and predicted class names
-    ground_truth_class_name = get_class_name_from_id(d['annotations'][0]['category_id']) if d['annotations'] else 'None'
-    predicted_class_name = get_class_name_from_id(instances.pred_classes[0].item()) if len(instances) > 0 else 'None'
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
-    ax1.imshow(out_gt.get_image()[:, :, ::-1])
-    ax1.set_title(f"Ground Truth: {ground_truth_class_name}")
-    ax1.axis('off')
-
-    ax2.imshow(out_pred.get_image()[:, :, ::-1])
-    ax2.set_title(f"Predicted: {predicted_class_name}")
-    ax2.axis('off')
-
-    result_image_path = os.path.join(results_dir, os.path.basename(d["file_name"]))
-    plt.savefig(result_image_path)
-    plt.close()
-
-# Calculate the overall F1 score and accuracy with the best threshold
-y_true = []
-y_pred = []
-for d in dataset_dicts:
-    im = cv2.imread(d["file_name"])
-    outputs = predictor(im)
-    instances = outputs["instances"].to("cpu")
-    classes = instances.pred_classes.tolist()
-    scores = instances.scores.tolist()
-
-    for class_id, score in zip(classes, scores):
-        if score >= 0.7:  # Filter out low confidence predictions
-            y_pred.append(class_id)
-            y_true.append(d['annotations'][0]['category_id'])
-
-final_f1 = f1_score(y_true, y_pred, average='weighted')
-final_accuracy = accuracy_score(y_true, y_pred)
-print(f"Final F1 Score: {final_f1}")
-print(f"Final Accuracy: {final_accuracy}")
-
-# Evaluation with COCO Evaluator
-evaluator = COCOEvaluator("my_dataset_val", cfg, False, output_dir="./output/")
-val_loader = build_detection_test_loader(cfg, "my_dataset_val", num_workers=0)  # Disable multiprocessing
-inference_on_dataset(trainer.model, val_loader, evaluator)
-
-print(f"Total execution time: {time.time() - start_time} seconds")
