@@ -7,18 +7,16 @@ import json
 import cv2
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit
-from detectron2.engine import DefaultTrainer, DefaultPredictor
+from detectron2.engine import DefaultTrainer
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.data.datasets import register_coco_instances
 from detectron2.utils.logger import setup_logger
-from detectron2.data import MetadataCatalog, DatasetCatalog
 import torch
 import copy
 import imgaug.augmenters as iaa
 from detectron2.data import detection_utils as utils
 from detectron2.data import DatasetMapper, build_detection_train_loader
-import time
 
 # Set the sharing strategy to 'file_system'
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -57,11 +55,11 @@ def classify_images(df):
         classification = row['Pathology Classification/ Follow up']
         
         if classification == 'Benign':
-            classifications[image_name] = 'Benign'
+            classifications[image_name] = 0  # Use integer labels
         elif classification == 'Malignant':
-            classifications[image_name] = 'Malignant'
+            classifications[image_name] = 1
         else:
-            classifications[image_name] = 'Normal'
+            classifications[image_name] = 2
     
     return classifications
 
@@ -71,12 +69,12 @@ os.makedirs('./data/annotated_images', exist_ok=True)
 
 images_info = []
 annotations_info = []
-category_id = 1  # Assuming one category for simplicity
+category_id_mapping = {0: 'Benign', 1: 'Malignant', 2: 'Normal'}
 
 for filename, points in annotations_by_filename.items():
     image_path = f'./data/images/{filename}'
     if os.path.exists(image_path):
-        classification = classifications.get(os.path.splitext(filename)[0], 'Normal')
+        classification = classifications.get(os.path.splitext(filename)[0], 2)  # Default to 'Normal'
         annotated_image_path = f'./data/annotated_images/{filename}'
         image = cv2.imread(image_path)
         height, width = image.shape[:2]
@@ -91,7 +89,7 @@ for filename, points in annotations_by_filename.items():
                 annotations_info.append({
                     "id": len(annotations_info) + 1,
                     "image_id": len(images_info) + 1,
-                    "category_id": category_id,
+                    "category_id": classification,  # Use classification instead of category_id
                     "segmentation": segmentation,
                     "area": area,
                     "bbox": bbox,
@@ -105,7 +103,7 @@ for filename, points in annotations_by_filename.items():
         })
         cv2.imwrite(annotated_image_path, image)
 
-categories_info = [{"id": category_id, "name": "Lesion"}]
+categories_info = [{"id": 0, "name": "Benign"}, {"id": 1, "name": "Malignant"}, {"id": 2, "name": "Normal"}]
 
 all_images = [f for f in os.listdir('./data/images') if f.endswith(('.jpg', '.jpeg'))]
 for image_file in all_images:
@@ -192,13 +190,13 @@ test_counts = {'Benign': 0, 'Malignant': 0, 'Normal': 0}
 
 for image in train_images:
     image_name = os.path.splitext(image['file_name'])[0]
-    classification = classifications.get(image_name, 'Normal')
-    train_counts[classification] += 1
+    classification = classifications.get(image_name, 2)  # Default to 'Normal'
+    train_counts[category_id_mapping[classification]] += 1
 
 for image in test_images:
     image_name = os.path.splitext(image['file_name'])[0]
-    classification = classifications.get(image_name, 'Normal')
-    test_counts[classification] += 1
+    classification = classifications.get(image_name, 2)  # Default to 'Normal'
+    test_counts[category_id_mapping[classification]] += 1
 
 print("Train counts:", train_counts)
 print("Test counts:", test_counts)
@@ -221,7 +219,7 @@ def get_imgaug_transforms():
 class ImgaugMapper(DatasetMapper):
     def __init__(self, cfg, is_train=True):
         super().__init__(cfg, is_train)
-        self.augmentations = get_imgaug_transforms
+                self.augmentations = get_imgaug_transforms()
         self.img_format = cfg.INPUT.FORMAT
 
     def __call__(self, dataset_dict):
@@ -238,7 +236,6 @@ class ImgaugMapper(DatasetMapper):
         dataset_dict["instances"] = utils.filter_empty_instances(instances)
         return dataset_dict
 
-# Define Custom Trainer with imgaug
 class TrainerWithCustomLoader(DefaultTrainer):
     @classmethod
     def build_train_loader(cls, cfg):
