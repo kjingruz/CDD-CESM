@@ -82,7 +82,7 @@ def process_images(annotations_by_filename, classifications, df_annotations):
     excel_classifications = df_annotations.set_index('Image_name')['Pathology Classification/ Follow up'].to_dict()
 
     for filename, points in annotations_by_filename.items():
-        image_path = f'../data/images/{filename}'
+        image_path = f'../../data/images/{filename}'
         annotated_image_path = f'../data/annotated_images/{filename}'
         if os.path.exists(image_path):
             classification = classifications.get(os.path.basename(os.path.splitext(filename)[0]), 2)
