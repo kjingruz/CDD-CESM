@@ -74,7 +74,7 @@ def classify_images(df):
     return classifications
 
 def process_images(annotations_by_filename, classifications, df_annotations):
-    os.makedirs('../data/annotated_images', exist_ok=True)
+    os.makedirs('../../data/annotated_images', exist_ok=True)
     images_info = []
     annotations_info = []
     category_id_mapping = {0: 'Benign', 1: 'Malignant', 2: 'Normal'}
@@ -83,7 +83,7 @@ def process_images(annotations_by_filename, classifications, df_annotations):
 
     for filename, points in annotations_by_filename.items():
         image_path = f'../../data/images/{filename}'
-        annotated_image_path = f'../data/annotated_images/{filename}'
+        annotated_image_path = f'../../data/annotated_images/{filename}'
         if os.path.exists(image_path):
             classification = classifications.get(os.path.basename(os.path.splitext(filename)[0]), 2)
             preprocess_and_save(image_path, annotated_image_path)
@@ -129,11 +129,11 @@ def process_images(annotations_by_filename, classifications, df_annotations):
             })
             tracked_category_counts[category_id_mapping[classification]] += 1
 
-    all_images = [f for f in os.listdir('../data/images') if f.endswith(('.jpg', '.jpeg'))]
+    all_images = [f for f in os.listdir('../../data/images') if f.endswith(('.jpg', '.jpeg'))]
     for image_file in all_images:
         if image_file not in annotations_by_filename:
-            image_path = f'../data/images/{image_file}'
-            annotated_image_path = f'../data/annotated_images/{image_file}'
+            image_path = f'../../data/images/{image_file}'
+            annotated_image_path = f'../../data/annotated_images/{image_file}'
             if os.path.exists(image_path):
                 image = cv2.imread(image_path)
                 if image is None:

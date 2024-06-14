@@ -109,7 +109,7 @@ def main():
     cfg.SOLVER.WARMUP_FACTOR = 1.0 / 1000
     cfg.SOLVER.GAMMA = 0.05
 
-    output_dir = "/path/to/output/directory"
+    output_dir = "../output/directory"  # Update to your desired output directory
     os.makedirs(output_dir, exist_ok=True)
     cfg.OUTPUT_DIR = output_dir
 
@@ -121,6 +121,6 @@ def main():
         print(f"Exception during training: {e}")
 
 if __name__ == "__main__":
-    register_dataset("my_dataset_train", "./data/annotations.csv", "./data/train")
-    register_dataset("my_dataset_val", "./data/annotations.csv", "./data/valid")
+    register_dataset("my_dataset_train", "../../data/annotations.csv", "../../data/train")
+    register_dataset("my_dataset_val", "../../data/annotations.csv", "../../data/valid")
     main()
