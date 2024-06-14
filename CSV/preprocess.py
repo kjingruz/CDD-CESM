@@ -74,7 +74,7 @@ def classify_images(df):
     return classifications
 
 def process_images(annotations_by_filename, classifications, df_annotations):
-    os.makedirs('./data/annotated_images', exist_ok=True)
+    os.makedirs('../data/annotated_images', exist_ok=True)
     images_info = []
     annotations_info = []
     category_id_mapping = {0: 'Benign', 1: 'Malignant', 2: 'Normal'}
@@ -82,8 +82,8 @@ def process_images(annotations_by_filename, classifications, df_annotations):
     excel_classifications = df_annotations.set_index('Image_name')['Pathology Classification/ Follow up'].to_dict()
 
     for filename, points in annotations_by_filename.items():
-        image_path = f'./data/images/{filename}'
-        annotated_image_path = f'./data/annotated_images/{filename}'
+        image_path = f'../data/images/{filename}'
+        annotated_image_path = f'../data/annotated_images/{filename}'
         if os.path.exists(image_path):
             classification = classifications.get(os.path.basename(os.path.splitext(filename)[0]), 2)
             preprocess_and_save(image_path, annotated_image_path)
@@ -129,11 +129,11 @@ def process_images(annotations_by_filename, classifications, df_annotations):
             })
             tracked_category_counts[category_id_mapping[classification]] += 1
 
-    all_images = [f for f in os.listdir('./data/images') if f.endswith(('.jpg', '.jpeg'))]
+    all_images = [f for f in os.listdir('../data/images') if f.endswith(('.jpg', '.jpeg'))]
     for image_file in all_images:
-        if image_file not in annotated_images:
-            image_path = f'./data/images/{image_file}'
-            annotated_image_path = f'./data/annotated_images/{image_file}'
+        if image_file not in annotations_by_filename:
+            image_path = f'../data/images/{image_file}'
+            annotated_image_path = f'../data/annotated_images/{image_file}'
             if os.path.exists(image_path):
                 image = cv2.imread(image_path)
                 if image is None:
@@ -191,9 +191,9 @@ def save_annotations_to_csv(images_info, annotations_info, output_csv_path):
     print(f"Created annotations CSV at: {output_csv_path}")
 
 if __name__ == "__main__":
-    segmentation_file = './data/Radiology_hand_drawn_segmentations_v2.csv'
-    classification_file = './data/Radiology-manual-annotations.xlsx'
-    output_csv_path = './data/annotations.csv'
+    segmentation_file = '../data/Radiology_hand_drawn_segmentations_v2.csv'
+    classification_file = '../data/Radiology-manual-annotations.xlsx'
+    output_csv_path = '../data/annotations.csv'
 
     annotations_by_filename, df_annotations = load_annotations(segmentation_file, classification_file)
     classifications = classify_images(df_annotations)
