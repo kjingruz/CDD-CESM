@@ -191,9 +191,9 @@ def save_annotations_to_csv(images_info, annotations_info, output_csv_path):
     print(f"Created annotations CSV at: {output_csv_path}")
 
 if __name__ == "__main__":
-    segmentation_file = '../data/Radiology_hand_drawn_segmentations_v2.csv'
-    classification_file = '../data/Radiology-manual-annotations.xlsx'
-    output_csv_path = '../data/annotations.csv'
+    segmentation_file = '../../data/Radiology_hand_drawn_segmentations_v2.csv'
+    classification_file = '../../data/Radiology-manual-annotations.xlsx'
+    output_csv_path = '../../data/annotations.csv'
 
     annotations_by_filename, df_annotations = load_annotations(segmentation_file, classification_file)
     classifications = classify_images(df_annotations)
