@@ -12,7 +12,7 @@ def create_directories(directories):
 def extract_patient_id(filename):
     return filename.split('_')[0][1:]
 
-def verify_and_copy_files(excel_file, image_dir, train_dir, valid_dir, train_ratio=0.8):
+def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_ratio=0.8):
     # Check if Excel file exists
     if not os.path.exists(excel_file):
         print(f"Excel file {excel_file} does not exist.")
@@ -20,19 +20,22 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, valid_dir, train_rat
 
     # Load Excel file
     try:
-        df = pd.read_excel(excel_file, sheet_name='Sheet1')
+        df = pd.read_excel(excel_file, sheet_name=0)  # Ensure correct sheet name
     except Exception as e:
         print(f"Failed to load Excel file: {e}")
         return False
 
     # Ensure the dataframe has the required columns
-    required_columns = ['file_name', 'Pathology Classification/ Follow up']
+    required_columns = ['Image_name', 'Pathology Classification/ Follow up']
     if not all(col in df.columns for col in required_columns):
-        print("Excel file must contain 'file_name' and 'Pathology Classification/ Follow up' columns.")
+        print("Excel file must contain 'Image_name' and 'Pathology Classification/ Follow up' columns.")
         return False
 
     # Rename the classification column for consistency
-    df.rename(columns={'Pathology Classification/ Follow up': 'classification'}, inplace=True)
+    df.rename(columns={'Pathology Classification/ Follow up': 'classification', 'Image_name': 'file_name'}, inplace=True)
+
+    # Normalize file extensions
+    df['file_name'] = df['file_name'].apply(lambda x: f"{x}.jpg" if not x.lower().endswith('.jpg') else x)
 
     # Extract patient ID and add it to the dataframe
     df['patient_id'] = df['file_name'].apply(extract_patient_id)
@@ -44,7 +47,7 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, valid_dir, train_rat
     patient_groups = [group for _, group in grouped]
 
     # Split the patient groups into training and validation sets
-    train_groups, valid_groups = train_test_split(patient_groups, train_size=train_ratio, random_state=42)
+    train_groups, test_groups = train_test_split(patient_groups, train_size=train_ratio, random_state=42)
 
     def copy_files(groups, target_dir):
         all_files_exist = True
@@ -68,23 +71,57 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, valid_dir, train_rat
         return all_files_exist
 
     # Verify and copy training files
+    print("Copying training files...")
     train_files_exist = copy_files(train_groups, train_dir)
     # Verify and copy validation files
-    valid_files_exist = copy_files(valid_groups, valid_dir)
+    print("Copying validation files...")
+    test_files_exist = copy_files(test_groups, test_dir)
 
-    return train_files_exist and valid_files_exist
+    return train_files_exist and test_files_exist
+
+def verify_classifications(excel_file):
+    # Load Excel file
+    try:
+        df = pd.read_excel(excel_file, sheet_name=0)  # Ensure correct sheet name
+    except Exception as e:
+        print(f"Failed to load Excel file: {e}")
+        return False
+
+    # Ensure the dataframe has the required columns
+    required_columns = ['Image_name', 'Pathology Classification/ Follow up']
+    if not all(col in df.columns for col in required_columns):
+        print("Excel file must contain 'Image_name' and 'Pathology Classification/ Follow up' columns.")
+        return False
+
+    # Rename the classification column for consistency
+    df.rename(columns={'Pathology Classification/ Follow up': 'classification', 'Image_name': 'file_name'}, inplace=True)
+
+    # Verify classifications
+    for _, row in df.iterrows():
+        filename = row['file_name']
+        classification = row['classification']
+        if classification not in ['Benign', 'Malignant', 'Normal']:
+            print(f"Invalid classification {classification} for file {filename}")
+            return False
+
+    print("All classifications are verified.")
+    return True
 
 if __name__ == "__main__":
     excel_file = '../../data/Radiology-manual-annotations.xlsx'
     image_dir = '../../data/images'
     train_dir = '../../data/train'
-    valid_dir = '../../data/valid'
+    test_dir = '../../data/test'
 
     # Create directories if they don't exist
-    create_directories([train_dir, valid_dir])
+    create_directories([train_dir, test_dir])
 
-    # Verify files and copy them to the correct directories
-    if verify_and_copy_files(excel_file, image_dir, train_dir, valid_dir):
-        print("All files are correctly set up.")
+    # Verify classifications
+    if verify_classifications(excel_file):
+        # Verify files and copy them to the correct directories
+        if verify_and_copy_files(excel_file, image_dir, train_dir, test_dir):
+            print("All files are correctly set up.")
+        else:
+            print("There are missing files or directories.")
     else:
-        print("There are missing files or directories.")
+        print("There are issues with the classifications.")

@@ -15,33 +15,43 @@ import copy
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-def load_dataset_from_csv(csv_file, image_dir):
-    df = pd.read_csv(csv_file)
+def load_dataset(image_dir):
+    categories = ["benign", "malignant", "normal"]
+    category_id_mapping = { "benign": 0, "malignant": 1, "normal": 2 }
+    
     dataset_dicts = []
-    for idx, row in df.iterrows():
-        record = {}
-        filename = os.path.join(image_dir, row['file_name'])
-        if not os.path.exists(filename):
-            print(f"File {filename} does not exist, skipping.")
+    for category in categories:
+        category_path = os.path.join(image_dir, category)
+        if not os.path.exists(category_path):
+            print(f"Directory {category_path} does not exist, skipping.")
             continue
-        height, width = row['height'], row['width']
-        record["file_name"] = filename
-        record["image_id"] = idx
-        record["height"] = height
-        record["width"] = width
-        record["annotations"] = [{
-            "bbox": json.loads(row["bbox"]),
-            "bbox_mode": BoxMode.XYWH_ABS,
-            "segmentation": json.loads(row["segmentation"]),
-            "category_id": row["category_id"],
-            "iscrowd": row["iscrowd"],
-            "area": row["area"]
-        }]
-        dataset_dicts.append(record)
+        
+        for filename in os.listdir(category_path):
+            if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                continue
+            
+            record = {}
+            filepath = os.path.join(category_path, filename)
+            height, width = utils.read_image(filepath).shape[:2]
+            
+            record["file_name"] = filepath
+            record["image_id"] = len(dataset_dicts)
+            record["height"] = height
+            record["width"] = width
+            record["annotations"] = [{
+                "bbox": [0, 0, width, height],  # No specific bbox provided, default to the whole image
+                "bbox_mode": BoxMode.XYWH_ABS,
+                "segmentation": [],  # No segmentation provided
+                "category_id": category_id_mapping[category],
+                "iscrowd": 0,
+                "area": width * height
+            }]
+            dataset_dicts.append(record)
+    
     return dataset_dicts
 
-def register_dataset(name, csv_file, image_dir):
-    DatasetCatalog.register(name, lambda: load_dataset_from_csv(csv_file, image_dir))
+def register_dataset(name, image_dir):
+    DatasetCatalog.register(name, lambda: load_dataset(image_dir))
     MetadataCatalog.get(name).set(thing_classes=["Benign", "Malignant", "Normal"])
 
 def get_imgaug_transforms():
@@ -83,7 +93,7 @@ def main():
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
     cfg.DATASETS.TRAIN = ("my_dataset_train",)
-    cfg.DATASETS.TEST = ("my_dataset_val",)
+    cfg.DATASETS.TEST = ("my_dataset_test",)
     cfg.DATALOADER.NUM_WORKERS = 0  # Disable multiprocessing to avoid shared memory issue
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     cfg.SOLVER.IMS_PER_BATCH = 4  # Increase batch size
@@ -121,6 +131,6 @@ def main():
         print(f"Exception during training: {e}")
 
 if __name__ == "__main__":
-    register_dataset("my_dataset_train", "../../data/annotations.csv", "../../data/train")
-    register_dataset("my_dataset_val", "../../data/annotations.csv", "../../data/valid")
+    register_dataset("my_dataset_train", "../../data/train")
+    register_dataset("my_dataset_test", "../../data/test")
     main()

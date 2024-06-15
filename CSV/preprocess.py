@@ -56,7 +56,7 @@ def load_annotations(segmentation_file, classification_file):
             annotations_by_filename[annotation['filename']] = []
         annotations_by_filename[annotation['filename']].append(annotation['points'])
 
-    df_annotations = pd.read_excel(classification_file)
+    df_annotations = pd.read_excel(classification_file, sheet_name=0)  # Ensure correct sheet name
 
     return annotations_by_filename, df_annotations
 
@@ -79,7 +79,6 @@ def process_images(annotations_by_filename, classifications, df_annotations):
     annotations_info = []
     category_id_mapping = {0: 'Benign', 1: 'Malignant', 2: 'Normal'}
     tracked_category_counts = {'Benign': 0, 'Malignant': 0, 'Normal': 0}
-    excel_classifications = df_annotations.set_index('Image_name')['Pathology Classification/ Follow up'].to_dict()
 
     for filename, points in annotations_by_filename.items():
         image_path = f'../../data/images/{filename}'
@@ -135,7 +134,8 @@ def process_images(annotations_by_filename, classifications, df_annotations):
             image_path = f'../../data/images/{image_file}'
             annotated_image_path = f'../../data/annotated_images/{image_file}'
             if os.path.exists(image_path):
-                image = cv2.imread(image_path)
+                preprocess_and_save(image_path, annotated_image_path)
+                image = cv2.imread(annotated_image_path)
                 if image is None:
                     print(f"Failed to load image: {image_path}")
                     continue
