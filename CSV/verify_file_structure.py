@@ -12,7 +12,7 @@ def create_directories(directories):
 def extract_patient_id(filename):
     return filename.split('_')[0][1:]
 
-def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_ratio=0.8):
+def verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir, train_ratio=0.73, val_ratio=0.12, test_ratio=0.15):
     # Check if Excel file exists
     if not os.path.exists(excel_file):
         print(f"Excel file {excel_file} does not exist.")
@@ -46,8 +46,9 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_rati
     # Create a list of groups (each group corresponds to one patient)
     patient_groups = [group for _, group in grouped]
 
-    # Split the patient groups into training and validation sets
-    train_groups, test_groups = train_test_split(patient_groups, train_size=train_ratio, random_state=42)
+    # Split the patient groups into training, validation, and test sets
+    train_groups, temp_groups = train_test_split(patient_groups, train_size=train_ratio, random_state=42)
+    val_groups, test_groups = train_test_split(temp_groups, train_size=val_ratio/(val_ratio + test_ratio), random_state=42)
 
     def copy_files(groups, target_dir):
         all_files_exist = True
@@ -82,15 +83,29 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_rati
     train_files_exist, missing_train_files = copy_files(train_groups, train_dir)
     # Verify and copy validation files
     print("Copying validation files...")
+    val_files_exist, missing_val_files = copy_files(val_groups, val_dir)
+    # Verify and copy test files
+    print("Copying test files...")
     test_files_exist, missing_test_files = copy_files(test_groups, test_dir)
 
     # Attempt to copy missing files again
-    if not train_files_exist or not test_files_exist:
+    if not train_files_exist or not val_files_exist or not test_files_exist:
         print("Re-attempting to copy missing files...")
         for missing_file in missing_train_files:
             src_path = os.path.join(image_dir, os.path.basename(missing_file))
             classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
             dst_dir = os.path.join(train_dir, classification)
+            dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
+            if os.path.exists(src_path):
+                if not os.path.exists(dst_dir):
+                    os.makedirs(dst_dir)
+                shutil.copy(src_path, dst_path)
+                print(f"Re-attempted copy: {src_path} to {dst_path}")
+
+        for missing_file in missing_val_files:
+            src_path = os.path.join(image_dir, os.path.basename(missing_file))
+            classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
+            dst_dir = os.path.join(val_dir, classification)
             dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
             if os.path.exists(src_path):
                 if not os.path.exists(dst_dir):
@@ -109,7 +124,7 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_rati
                 shutil.copy(src_path, dst_path)
                 print(f"Re-attempted copy: {src_path} to {dst_path}")
 
-    return train_files_exist and test_files_exist
+    return train_files_exist and val_files_exist and test_files_exist
 
 def verify_classifications(excel_file):
     # Load Excel file
@@ -143,15 +158,16 @@ if __name__ == "__main__":
     excel_file = '../../data/Radiology-manual-annotations.xlsx'
     image_dir = '../../data/images'
     train_dir = '../../data/train'
+    val_dir = '../../data/val'
     test_dir = '../../data/test'
 
     # Create directories if they don't exist
-    create_directories([train_dir, test_dir])
+    create_directories([train_dir, val_dir, test_dir])
 
     # Verify classifications
     if verify_classifications(excel_file):
         # Verify files and copy them to the correct directories
-        if verify_and_copy_files(excel_file, image_dir, train_dir, test_dir):
+        if verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir):
             print("All files are correctly set up.")
         else:
             print("There are missing files or directories.")
