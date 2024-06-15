@@ -1,2 +1,0 @@
-{"data_time": 0.23393099999520928, "fast_rcnn/cls_accuracy": 0.0087890625, "iteration": 4, "loss_box_reg": 0.0, "loss_cls": 1.4884921312332153, "loss_rpn_cls": 0.0002875060308724642, "loss_rpn_loc": 0.0, "lr": 2.248e-05, "rank_data_time": 0.23393099999520928, "roi_head/num_bg_samples": 256.0, "roi_head/num_fg_samples": 0.0, "rpn/num_neg_anchors": 256.0, "rpn/num_pos_anchors": 0.0, "time": 33.150558374938555, "total_loss": 1.4887796372640878}
-{"eta_seconds": 265005.5636492588, "iteration": 5}

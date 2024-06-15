@@ -97,13 +97,13 @@ def main():
     cfg.DATALOADER.NUM_WORKERS = 0  # Disable multiprocessing to avoid shared memory issue
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     cfg.SOLVER.IMS_PER_BATCH = 4  # Increase batch size
-    cfg.SOLVER.BASE_LR = 0.0025  # Increase learning rate
-    cfg.SOLVER.MAX_ITER = 8000  # Increase max iterations for potentially better training
+    cfg.SOLVER.BASE_LR = 0.01  # Increase learning rate
+    cfg.SOLVER.MAX_ITER = 2000  # Reduce max iterations for shorter training time
     cfg.SOLVER.STEPS = []  # Do not decay learning rate
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256  # Increase batch size per image
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3  # Update this based on your classes (Benign, Malignant, Normal)
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    cfg.TEST.EVAL_PERIOD = 1000  # Evaluate less frequently to save time
+    cfg.TEST.EVAL_PERIOD = 500  # Evaluate less frequently to save time
 
     cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704, 736, 768, 800)
     cfg.INPUT.MAX_SIZE_TRAIN = 1333
@@ -114,12 +114,12 @@ def main():
     cfg.INPUT.CROP.SIZE = [0.9, 0.9]
     cfg.INPUT.RANDOM_FLIP = "horizontal"
 
-    cfg.SOLVER.WARMUP_ITERS = 500
+    cfg.SOLVER.WARMUP_ITERS = 100
     cfg.SOLVER.WARMUP_METHOD = "linear"
     cfg.SOLVER.WARMUP_FACTOR = 1.0 / 1000
-    cfg.SOLVER.GAMMA = 0.05
+    cfg.SOLVER.GAMMA = 0.1
 
-    output_dir = "../output/train"
+    output_dir = "../output/train_lowtime" 
     os.makedirs(output_dir, exist_ok=True)
     cfg.OUTPUT_DIR = output_dir
 
