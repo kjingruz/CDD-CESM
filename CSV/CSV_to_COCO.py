@@ -1,50 +1,52 @@
 import pandas as pd
 import json
 import os
+from detectron2.structures import BoxMode
 
 def csv_to_coco(csv_file, image_dir, output_file):
     df = pd.read_csv(csv_file)
-    coco_format = {
+    coco_output = {
         "images": [],
         "annotations": [],
         "categories": [
-            {"id": 1, "name": "Benign"},
-            {"id": 2, "name": "Malignant"},
-            {"id": 3, "name": "Normal"}
-        ]
+            {"id": 0, "name": "Benign"},
+            {"id": 1, "name": "Malignant"},
+            {"id": 2, "name": "Normal"},
+        ],
     }
-
+    
     for idx, row in df.iterrows():
-        filename = os.path.join(image_dir, row['file_name'])
-        if not os.path.exists(filename):
-            print(f"File {filename} does not exist, skipping.")
-            continue
-
-        height, width = row['height'], row['width']
-        image_info = {
-            "file_name": row['file_name'],
-            "height": height,
+        image_id = idx
+        filename = row['file_name']
+        width = row['width']
+        height = row['height']
+        bbox = json.loads(row['bbox'])
+        
+        coco_output["images"].append({
+            "id": image_id,
+            "file_name": filename,
             "width": width,
-            "id": idx
-        }
-        coco_format["images"].append(image_info)
-
-        annotation_info = {
-            "bbox": json.loads(row["bbox"]),
-            "bbox_mode": BoxMode.XYWH_ABS,
-            "segmentation": json.loads(row["segmentation"]),
+            "height": height,
+        })
+        
+        coco_output["annotations"].append({
+            "id": idx,
+            "image_id": image_id,
             "category_id": row["category_id"],
+            "bbox": bbox,
+            "bbox_mode": BoxMode.XYWH_ABS,
+            "segmentation": [],
             "iscrowd": row["iscrowd"],
-            "area": row["area"],
-            "image_id": idx,
-            "id": idx
-        }
-        coco_format["annotations"].append(annotation_info)
-
+            "area": row["area"]
+        })
+    
     with open(output_file, 'w') as f:
-        json.dump(coco_format, f)
+        json.dump(coco_output, f, indent=4)
+        
+    print(f"COCO JSON file saved at: {output_file}")
 
-    print(f"Annotations have been converted to COCO format and saved to {output_file}")
-
-# Convert annotations.csv to COCO JSON format
-csv_to_coco('./data/annotations.csv', './data/valid', './data/annotations.json')
+if __name__ == "__main__":
+    csv_file = './data/annotations.csv'
+    image_dir = './data/images'
+    output_file = './data/ground_truth.json'
+    csv_to_coco(csv_file, image_dir, output_file)
