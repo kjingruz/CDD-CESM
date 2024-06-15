@@ -5,6 +5,7 @@ from detectron2 import model_zoo
 from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_test_loader
 from detectron2.evaluation import COCOEvaluator, inference_on_dataset
 import torch
+import json
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -50,8 +51,13 @@ def main():
     evaluator = COCOEvaluator("my_dataset_val", cfg, False, output_dir=cfg.OUTPUT_DIR)
     val_loader = build_detection_test_loader(cfg, "my_dataset_val")
 
+    # Save predictions in COCO JSON format
     evaluation_results = inference_on_dataset(predictor.model, val_loader, evaluator)
     print(evaluation_results)
+    
+    # Assuming evaluator is COCOEvaluator and has an attribute _predictions for storing results
+    with open('predictions.json', 'w') as f:
+        json.dump(evaluator._predictions, f)
 
 if __name__ == "__main__":
     register_dataset("my_dataset_val", "./data/annotations.csv", "./data/valid")
