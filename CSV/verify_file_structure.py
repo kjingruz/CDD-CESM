@@ -51,6 +51,7 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_rati
 
     def copy_files(groups, target_dir):
         all_files_exist = True
+        missing_files = []
         for group in groups:
             for _, row in group.iterrows():
                 filename = row['file_name']
@@ -61,6 +62,7 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_rati
 
                 if not os.path.exists(src_path):
                     print(f"File {src_path} does not exist, skipping.")
+                    missing_files.append(src_path)
                     all_files_exist = False
                 else:
                     if not os.path.exists(dst_dir):
@@ -68,14 +70,44 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, test_dir, train_rati
                     shutil.copy(src_path, dst_path)
                     print(f"Copied {src_path} to {dst_path}")
 
-        return all_files_exist
+        if missing_files:
+            print("Missing files:")
+            for file in missing_files:
+                print(file)
+                
+        return all_files_exist, missing_files
 
     # Verify and copy training files
     print("Copying training files...")
-    train_files_exist = copy_files(train_groups, train_dir)
+    train_files_exist, missing_train_files = copy_files(train_groups, train_dir)
     # Verify and copy validation files
     print("Copying validation files...")
-    test_files_exist = copy_files(test_groups, test_dir)
+    test_files_exist, missing_test_files = copy_files(test_groups, test_dir)
+
+    # Attempt to copy missing files again
+    if not train_files_exist or not test_files_exist:
+        print("Re-attempting to copy missing files...")
+        for missing_file in missing_train_files:
+            src_path = os.path.join(image_dir, os.path.basename(missing_file))
+            classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
+            dst_dir = os.path.join(train_dir, classification)
+            dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
+            if os.path.exists(src_path):
+                if not os.path.exists(dst_dir):
+                    os.makedirs(dst_dir)
+                shutil.copy(src_path, dst_path)
+                print(f"Re-attempted copy: {src_path} to {dst_path}")
+
+        for missing_file in missing_test_files:
+            src_path = os.path.join(image_dir, os.path.basename(missing_file))
+            classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
+            dst_dir = os.path.join(test_dir, classification)
+            dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
+            if os.path.exists(src_path):
+                if not os.path.exists(dst_dir):
+                    os.makedirs(dst_dir)
+                shutil.copy(src_path, dst_path)
+                print(f"Re-attempted copy: {src_path} to {dst_path}")
 
     return train_files_exist and test_files_exist
 

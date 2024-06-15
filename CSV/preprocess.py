@@ -58,12 +58,13 @@ def load_annotations(segmentation_file, classification_file):
 
     df_annotations = pd.read_excel(classification_file, sheet_name=0)  # Ensure correct sheet name
 
+    print("Columns in the dataframe:", df_annotations.columns)
     return annotations_by_filename, df_annotations
 
 def classify_images(df):
     classifications = {}
     for index, row in df.iterrows():
-        image_name = os.path.basename(row['Image_name'])
+        image_name = os.path.basename(row['Image_name'])  # Ensure 'Image_name' matches the column in the Excel file
         classification = row['Pathology Classification/ Follow up']
         if classification == 'Benign':
             classifications[image_name] = 0
@@ -79,6 +80,7 @@ def process_images(annotations_by_filename, classifications, df_annotations):
     annotations_info = []
     category_id_mapping = {0: 'Benign', 1: 'Malignant', 2: 'Normal'}
     tracked_category_counts = {'Benign': 0, 'Malignant': 0, 'Normal': 0}
+    failed_images = []
 
     for filename, points in annotations_by_filename.items():
         image_path = f'../../data/images/{filename}'
@@ -89,6 +91,7 @@ def process_images(annotations_by_filename, classifications, df_annotations):
             image = cv2.imread(annotated_image_path)
             if image is None:
                 print(f"Failed to load annotated image: {annotated_image_path}")
+                failed_images.append(annotated_image_path)
                 continue
             height, width = image.shape[:2]
             if points:
@@ -138,6 +141,7 @@ def process_images(annotations_by_filename, classifications, df_annotations):
                 image = cv2.imread(annotated_image_path)
                 if image is None:
                     print(f"Failed to load image: {image_path}")
+                    failed_images.append(image_path)
                     continue
                 height, width = image.shape[:2]
                 images_info.append({
@@ -158,6 +162,12 @@ def process_images(annotations_by_filename, classifications, df_annotations):
                 tracked_category_counts['Normal'] += 1
 
     print("Tracked category counts:", tracked_category_counts)
+    print(f"Failed to process {len(failed_images)} images.")
+    if failed_images:
+        print("Failed images:")
+        for img in failed_images:
+            print(img)
+    
     return images_info, annotations_info
 
 def convert_to_native_types(data):
