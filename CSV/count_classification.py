@@ -11,26 +11,38 @@ def count_images_in_subgroups(base_dir):
             print(f"Directory {class_dir} does not exist.")
     return counts
 
-def display_counts(train_counts, test_counts):
-    total_counts = {key: train_counts[key] + test_counts[key] for key in train_counts.keys()}
+def display_counts(train_counts, valid_counts, test_counts):
+    total_counts = {key: train_counts[key] + valid_counts[key] + test_counts[key] for key in train_counts.keys()}
 
     print(f"[{pd.Timestamp.now()} d2.data.build]: Distribution of instances among all 3 categories:")
-    print("|  category  | #instances   |  category  | #instances   |  category  | #instances   |")
-    print("|:----------:|:-------------|:----------:|:-------------|:----------:|:-------------|")
-    print(f"|   Benign   | {train_counts['Benign']}          | Malignant  | {train_counts['Malignant']}         |   Normal   | {train_counts['Normal']}         |")
-    print(f"|   total    | {sum(train_counts.values())}         |            |              |            |              |")
-    print(f"|   Benign   | {test_counts['Benign']}          | Malignant  | {test_counts['Malignant']}         |   Normal   | {test_counts['Normal']}         |")
-    print(f"|   total    | {sum(test_counts.values())}         |            |              |            |              |")
-    print(f"|   Benign   | {total_counts['Benign']}          | Malignant  | {total_counts['Malignant']}         |   Normal   | {total_counts['Normal']}         |")
-    print(f"|   total    | {sum(total_counts.values())}         |            |              |            |              |")
+    print("|  Subset  |  category  | #instances   |")
+    print("|:--------:|:----------:|:-------------|")
+    print(f"|   Train  |   Benign   | {train_counts['Benign']}          |")
+    print(f"|          | Malignant  | {train_counts['Malignant']}         |")
+    print(f"|          |   Normal   | {train_counts['Normal']}         |")
+    print(f"|          |   total    | {sum(train_counts.values())}         |")
+    print(f"|   Valid  |   Benign   | {valid_counts['Benign']}          |")
+    print(f"|          | Malignant  | {valid_counts['Malignant']}         |")
+    print(f"|          |   Normal   | {valid_counts['Normal']}         |")
+    print(f"|          |   total    | {sum(valid_counts.values())}         |")
+    print(f"|   Test   |   Benign   | {test_counts['Benign']}          |")
+    print(f"|          | Malignant  | {test_counts['Malignant']}         |")
+    print(f"|          |   Normal   | {test_counts['Normal']}         |")
+    print(f"|          |   total    | {sum(test_counts.values())}         |")
+    print(f"|  Overall |   Benign   | {total_counts['Benign']}          |")
+    print(f"|          | Malignant  | {total_counts['Malignant']}         |")
+    print(f"|          |   Normal   | {total_counts['Normal']}         |")
+    print(f"|          |   total    | {sum(total_counts.values())}         |")
 
 if __name__ == "__main__":
     train_dir = '../../data/train'
+    valid_dir = '../../data/valid'
     test_dir = '../../data/test'
 
-    # Count images in train and test subgroups
+    # Count images in train, valid, and test subgroups
     train_counts = count_images_in_subgroups(train_dir)
+    valid_counts = count_images_in_subgroups(valid_dir)
     test_counts = count_images_in_subgroups(test_dir)
 
     # Display the counts
-    display_counts(train_counts, test_counts)
+    display_counts(train_counts, valid_counts, test_counts)

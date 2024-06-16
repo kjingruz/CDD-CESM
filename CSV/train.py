@@ -1,5 +1,5 @@
 import os
-from detectron2.engine import DefaultTrainer
+from detectron2.engine import DefaultTrainer, hooks
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
@@ -12,6 +12,8 @@ import json
 import numpy as np
 from detectron2.data import DatasetMapper
 import copy
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -89,11 +91,24 @@ class TrainerWithCustomLoader(DefaultTrainer):
     def build_train_loader(cls, cfg):
         return build_detection_train_loader(cfg, mapper=ImgaugMapper(cfg, is_train=True))
 
+    @classmethod
+    def build_evaluator(cls, cfg, dataset_name):
+        return COCOEvaluator(dataset_name, cfg, False, output_dir=cfg.OUTPUT_DIR)
+
+    def build_hooks(self):
+        hooks = super().build_hooks()
+        hooks.insert(-1, hooks.EvalHook(
+            self.cfg.TEST.EVAL_PERIOD,
+            lambda: self.test(self.cfg, self.model, self.build_evaluator(self.cfg, "my_dataset_val"))
+        ))
+        return hooks
+
 def main():
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
     cfg.DATASETS.TRAIN = ("my_dataset_train",)
     cfg.DATASETS.TEST = ("my_dataset_test",)
+    cfg.DATASETS.VAL = ("my_dataset_val",)
     cfg.DATALOADER.NUM_WORKERS = 0  # Disable multiprocessing to avoid shared memory issue
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     cfg.SOLVER.IMS_PER_BATCH = 4  # Increase batch size
@@ -132,5 +147,6 @@ def main():
 
 if __name__ == "__main__":
     register_dataset("my_dataset_train", "../../data/train")
+    register_dataset("my_dataset_val", "../../data/valid")
     register_dataset("my_dataset_test", "../../data/test")
     main()
