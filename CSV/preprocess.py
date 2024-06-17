@@ -127,7 +127,8 @@ def process_images(annotations_by_filename, classifications, df_annotations):
                 "id": len(images_info) + 1,
                 "file_name": filename,
                 "width": int(width),
-                "height": int(height)
+                "height": int(height),
+                "subgroup": ""  # Empty subgroup column
             })
             tracked_category_counts[category_id_mapping[classification]] += 1
 
@@ -148,7 +149,8 @@ def process_images(annotations_by_filename, classifications, df_annotations):
                     "id": len(images_info) + 1,
                     "file_name": image_file,
                     "width": int(width),
-                    "height": int(height)
+                    "height": int(height),
+                    "subgroup": ""  # Empty subgroup column
                 })
                 annotations_info.append({
                     "id": len(annotations_info) + 1,
@@ -183,7 +185,7 @@ def convert_to_native_types(data):
 def save_annotations_to_csv(images_info, annotations_info, output_csv_path):
     annotations_info = convert_to_native_types(annotations_info)
     with open(output_csv_path, 'w', newline='') as csvfile:
-        fieldnames = ['file_name', 'width', 'height', 'category_id', 'segmentation', 'bbox', 'area', 'iscrowd']
+        fieldnames = ['file_name', 'width', 'height', 'category_id', 'segmentation', 'bbox', 'area', 'iscrowd', 'subgroup']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for img_info, ann_info in zip(images_info, annotations_info):
@@ -195,7 +197,8 @@ def save_annotations_to_csv(images_info, annotations_info, output_csv_path):
                 'segmentation': json.dumps(ann_info['segmentation']),
                 'bbox': json.dumps(ann_info['bbox']),
                 'area': ann_info['area'],
-                'iscrowd': ann_info['iscrowd']
+                'iscrowd': ann_info['iscrowd'],
+                'subgroup': img_info['subgroup']  # Adding subgroup column
             }
             writer.writerow(row)
     print(f"Created annotations CSV at: {output_csv_path}")
@@ -209,3 +212,4 @@ if __name__ == "__main__":
     classifications = classify_images(df_annotations)
     images_info, annotations_info = process_images(annotations_by_filename, classifications, df_annotations)
     save_annotations_to_csv(images_info, annotations_info, output_csv_path)
+

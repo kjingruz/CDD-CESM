@@ -1,0 +1,1 @@
+{"info": {"date_created": "2024-06-16 19:38:25.882283", "description": "Automatically generated COCO json file for Detectron2."}, "images": [], "categories": [{"id": 0, "name": "Benign"}, {"id": 1, "name": "Malignant"}, {"id": 2, "name": "Normal"}], "licenses": null}
