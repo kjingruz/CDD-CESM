@@ -3,14 +3,11 @@ from detectron2.engine import DefaultTrainer, hooks as detectron_hooks
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.data import build_detection_train_loader, DatasetMapper, detection_utils as utils
-from detectron2.structures import BoxMode
 import imgaug.augmenters as iaa
 import torch
 import copy
-from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.evaluation import COCOEvaluator
 from detectron2.data.datasets import register_coco_instances
-import pandas as pd
-import json
 import numpy as np
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -58,7 +55,7 @@ class TrainerWithCustomLoader(DefaultTrainer):
         hooks = super().build_hooks()
         hooks.insert(-1, detectron_hooks.EvalHook(
             self.cfg.TEST.EVAL_PERIOD,
-            lambda: self.test(self.cfg, self.model, self.build_evaluator(self.cfg, "my_dataset_val"))
+            lambda: self.test(self.cfg, self.model, self.build_evaluator(self.cfg, self.cfg.DATASETS.TEST[0]))
         ))
         return hooks
 
@@ -66,18 +63,17 @@ def main():
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
     cfg.DATASETS.TRAIN = ("my_dataset_train",)
-    cfg.DATASETS.TEST = ("my_dataset_test",)
-    cfg.DATASETS.VAL = ("my_dataset_val",)
+    cfg.DATASETS.TEST = ("my_dataset_val",)  # Use validation set for evaluation during training
     cfg.DATALOADER.NUM_WORKERS = 0  # Disable multiprocessing to avoid shared memory issue
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
-    cfg.SOLVER.IMS_PER_BATCH = 4  # Increase batch size
-    cfg.SOLVER.BASE_LR = 0.01  # Increase learning rate
-    cfg.SOLVER.MAX_ITER = 2000  # Reduce max iterations for shorter training time
+    cfg.SOLVER.IMS_PER_BATCH = 2  # Adjust batch size
+    cfg.SOLVER.BASE_LR = 0.001  # Lower learning rate
+    cfg.SOLVER.MAX_ITER = 1000  # Adjust iterations
     cfg.SOLVER.STEPS = []  # Do not decay learning rate
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256  # Increase batch size per image
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3  # Update this based on your classes (Benign, Malignant, Normal)
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128  # Adjust batch size per image
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3  # Update based on classes
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    cfg.TEST.EVAL_PERIOD = 500  # Evaluate more frequently to check for overfitting
+    cfg.TEST.EVAL_PERIOD = 250  # Evaluate more frequently
 
     cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704, 736, 768, 800)
     cfg.INPUT.MAX_SIZE_TRAIN = 1333

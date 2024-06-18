@@ -9,9 +9,9 @@ def csv_to_coco(csv_file, image_dir, output_file):
         "images": [],
         "annotations": [],
         "categories": [
-            {"id": 0, "name": "Benign"},
-            {"id": 1, "name": "Malignant"},
-            {"id": 2, "name": "Normal"},
+            {"id": 1, "name": "Benign"},
+            {"id": 2, "name": "Malignant"},
+            {"id": 3, "name": "Normal"},
         ],
     }
     
@@ -29,15 +29,16 @@ def csv_to_coco(csv_file, image_dir, output_file):
             "height": height,
         })
         
+        category_id = int(row["Classification"]) + 1
         coco_output["annotations"].append({
             "id": idx,
             "image_id": image_id,
-            "category_id": row["Classification"],
+            "category_id": category_id,  # Ensure category ID is incremented by 1
             "bbox": bbox,
             "bbox_mode": BoxMode.XYWH_ABS,
             "segmentation": [],
-            "iscrowd": row["iscrowd"],
-            "area": row["area"]
+            "iscrowd": int(row["iscrowd"]),
+            "area": float(row["area"])
         })
     
     with open(output_file, 'w') as f:
