@@ -1,18 +1,17 @@
 import os
-from detectron2.engine import DefaultTrainer, hooks
+from detectron2.engine import DefaultTrainer, hooks as detectron_hooks
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
-from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader, build_detection_test_loader
+from detectron2.data import build_detection_train_loader, DatasetMapper, detection_utils as utils
 from detectron2.structures import BoxMode
 import imgaug.augmenters as iaa
 import torch
-import pandas as pd
-import json
-import numpy as np
-from detectron2.data import DatasetMapper
 import copy
 from detectron2.evaluation import COCOEvaluator, inference_on_dataset
 from detectron2.data.datasets import register_coco_instances
+import pandas as pd
+import json
+import numpy as np
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -57,7 +56,7 @@ class TrainerWithCustomLoader(DefaultTrainer):
 
     def build_hooks(self):
         hooks = super().build_hooks()
-        hooks.insert(-1, hooks.EvalHook(
+        hooks.insert(-1, detectron_hooks.EvalHook(
             self.cfg.TEST.EVAL_PERIOD,
             lambda: self.test(self.cfg, self.model, self.build_evaluator(self.cfg, "my_dataset_val"))
         ))
@@ -94,7 +93,7 @@ def main():
     cfg.SOLVER.WARMUP_FACTOR = 1.0 / 1000
     cfg.SOLVER.GAMMA = 0.1
 
-    output_dir = "../output/train_lowtime"
+    output_dir = "../output/train_lowtime/2nd_Attempt"
     os.makedirs(output_dir, exist_ok=True)
     cfg.OUTPUT_DIR = output_dir
 

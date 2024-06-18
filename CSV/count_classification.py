@@ -3,7 +3,7 @@ import pandas as pd
 
 def count_images_in_csv(csv_file):
     df = pd.read_csv(csv_file)
-    counts = df['category_id'].value_counts().to_dict()
+    counts = df['Classification'].value_counts().to_dict()
     # Initialize counts for all categories
     counts = {0: counts.get(0, 0), 1: counts.get(1, 0), 2: counts.get(2, 0)}
     # Map numerical categories to their names

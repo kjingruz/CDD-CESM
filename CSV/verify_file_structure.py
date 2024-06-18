@@ -65,8 +65,8 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir, a
     # Rename the classification column for consistency
     df.rename(columns={'Pathology Classification/ Follow up': 'category_id', 'Image_name': 'file_name'}, inplace=True)
 
-    # Normalize file extensions
-    df['file_name'] = df['file_name'].apply(lambda x: f"{x}.jpg" if not x.lower().endswith('.jpg') else x)
+    # Normalize file extensions and remove spaces
+    df['file_name'] = df['file_name'].apply(lambda x: ' '.join(x.split()).strip() + '.jpg')
 
     # Extract patient ID and add it to the dataframe
     df['patient_id'] = df['file_name'].apply(extract_patient_id)
@@ -96,7 +96,14 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir, a
         for group in groups:
             for _, row in group.iterrows():
                 filename = row['file_name']
-                classification = row['classification']
+                category_id = row['category_id']
+                if category_id == 'Benign':
+                    classification = 'benign'
+                elif category_id == 'Malignant':
+                    classification = 'malignant'
+                else:
+                    classification = 'normal'
+
                 src_path = os.path.join(image_dir, filename)
                 dst_dir = os.path.join(target_dir, classification)
                 dst_path = os.path.join(dst_dir, filename)
@@ -135,7 +142,13 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir, a
         print("Re-attempting to copy missing files...")
         for missing_file in missing_train_files:
             src_path = os.path.join(image_dir, os.path.basename(missing_file))
-            classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
+            category_id = df[df['file_name'] == os.path.basename(missing_file)]['category_id'].values[0]
+            if category_id == 'Benign':
+                classification = 'benign'
+            elif category_id == 'Malignant':
+                classification = 'malignant'
+            else:
+                classification = 'normal'
             dst_dir = os.path.join(train_dir, classification)
             dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
             if os.path.exists(src_path):
@@ -146,7 +159,13 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir, a
 
         for missing_file in missing_val_files:
             src_path = os.path.join(image_dir, os.path.basename(missing_file))
-            classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
+            category_id = df[df['file_name'] == os.path.basename(missing_file)]['category_id'].values[0]
+            if category_id == 'Benign':
+                classification = 'benign'
+            elif category_id == 'Malignant':
+                classification = 'malignant'
+            else:
+                classification = 'normal'
             dst_dir = os.path.join(val_dir, classification)
             dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
             if os.path.exists(src_path):
@@ -157,7 +176,13 @@ def verify_and_copy_files(excel_file, image_dir, train_dir, val_dir, test_dir, a
 
         for missing_file in missing_test_files:
             src_path = os.path.join(image_dir, os.path.basename(missing_file))
-            classification = df[df['file_name'] == os.path.basename(missing_file)]['classification'].values[0]
+            category_id = df[df['file_name'] == os.path.basename(missing_file)]['category_id'].values[0]
+            if category_id == 'Benign':
+                classification = 'benign'
+            elif category_id == 'Malignant':
+                classification = 'malignant'
+            else:
+                classification = 'normal'
             dst_dir = os.path.join(test_dir, classification)
             dst_path = os.path.join(dst_dir, os.path.basename(missing_file))
             if os.path.exists(src_path):
@@ -188,12 +213,15 @@ def verify_classifications(excel_file):
         return False
 
     # Rename the classification column for consistency
-    df.rename(columns={'Pathology Classification/ Follow up': 'classification', 'Image_name': 'file_name'}, inplace=True)
+    df.rename(columns={'Pathology Classification/ Follow up': 'category_id', 'Image_name': 'file_name'}, inplace=True)
 
-    # Verify classifications
+    # Normalize filenames to remove leading/trailing spaces and multiple spaces
+    df['file_name'] = df['file_name'].apply(lambda x: ' '.join(x.split()).strip() + '.jpg')
+
+        # Verify classifications
     for _, row in df.iterrows():
         filename = row['file_name']
-        classification = row['classification']
+        classification = row['category_id']
         if classification not in ['Benign', 'Malignant', 'Normal']:
             print(f"Invalid classification {classification} for file {filename}")
             return False
@@ -261,7 +289,7 @@ def classify_images(df):
     classifications = {}
     for index, row in df.iterrows():
         image_name = os.path.basename(row['Image_name'])  # Ensure 'Image_name' matches the column in the Excel file
-        classification = row['Pathology Classification/ Follow up']
+        classification = row['Classification']
         if classification == 'Benign':
             classifications[image_name] = 0
         elif classification == 'Malignant':

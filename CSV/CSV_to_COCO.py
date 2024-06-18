@@ -32,7 +32,7 @@ def csv_to_coco(csv_file, image_dir, output_file):
         coco_output["annotations"].append({
             "id": idx,
             "image_id": image_id,
-            "category_id": row["category_id"],
+            "category_id": row["Classification"],
             "bbox": bbox,
             "bbox_mode": BoxMode.XYWH_ABS,
             "segmentation": [],
