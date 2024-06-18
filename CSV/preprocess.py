@@ -65,13 +65,8 @@ def classify_images(df):
     classifications = {}
     for index, row in df.iterrows():
         image_name = os.path.basename(row['Image_name'])  # Ensure 'Image_name' matches the column in the Excel file
-        classification = row['Pathology Classification/ Follow up']
-        if classification == 'Benign':
-            classifications[image_name] = 0
-        elif classification == 'Malignant':
-            classifications[image_name] = 1
-        else:
-            classifications[image_name] = 2
+        classification = row['Classification']
+        classifications[image_name] = classification
     return classifications
 
 def process_images(annotations_by_filename, classifications, df_annotations):
@@ -203,6 +198,60 @@ def save_annotations_to_csv(images_info, annotations_info, output_csv_path):
             writer.writerow(row)
     print(f"Created annotations CSV at: {output_csv_path}")
 
+def update_category_id(annotations_csv, classification_file):
+    annotations_df = pd.read_csv(annotations_csv)
+    classification_df = pd.read_excel(classification_file)
+    classification_df.rename(columns={'Pathology Classification/ Follow up': 'classification', 'Image_name': 'file_name'}, inplace=True)
+
+    # Normalize file extensions
+    classification_df['file_name'] = classification_df['file_name'].apply(lambda x: f"{x}.jpg" if not x.lower().endswith('.jpg') else x)
+
+        # Map classifications to IDs
+    classification_df['classification_id'] = classification_df['classification'].map({'Benign': 0, 'Malignant': 1, 'Normal': 2})
+
+    # Create a mapping from file name to classification ID
+    classification_mapping = dict(zip(classification_df['file_name'], classification_df['classification_id']))
+
+    # Update category_id in annotations_df
+    annotations_df['category_id'] = annotations_df['file_name'].map(classification_mapping)
+
+    # Save the updated annotations_df to CSV
+    annotations_df.to_csv(annotations_csv, index=False)
+    print(f"Updated annotations CSV with correct category IDs at: {annotations_csv}")
+
+    # Print the count of each category_id
+    category_counts = annotations_df['category_id'].value_counts()
+    print("Category counts:\n", category_counts)
+
+    return annotations_df
+
+def compare_annotations(annotation_csv, classification_file):
+    annotation_df = pd.read_csv(annotation_csv)
+    classification_df = pd.read_excel(classification_file)
+    classification_df.rename(columns={'Pathology Classification/ Follow up': 'classification', 'Image_name': 'file_name'}, inplace=True)
+
+    discrepancies = []
+
+    for _, row in annotation_df.iterrows():
+        file_name = row['file_name']
+        csv_classification = row['category_id']
+        original_classification = classification_df[classification_df['file_name'] == file_name]['classification'].values
+
+        if len(original_classification) > 0:
+            original_classification = original_classification[0]
+            if original_classification == 'Benign':
+                original_classification_id = 0
+            elif original_classification == 'Malignant':
+                original_classification_id = 1
+            else:
+                original_classification_id = 2
+
+            if csv_classification != original_classification_id:
+                discrepancies.append(file_name)
+
+    return discrepancies
+
+
 if __name__ == "__main__":
     segmentation_file = '../../data/Radiology_hand_drawn_segmentations_v2.csv'
     classification_file = '../../data/Radiology-manual-annotations.xlsx'
@@ -212,4 +261,19 @@ if __name__ == "__main__":
     classifications = classify_images(df_annotations)
     images_info, annotations_info = process_images(annotations_by_filename, classifications, df_annotations)
     save_annotations_to_csv(images_info, annotations_info, output_csv_path)
+
+    # Update category_id in annotations.csv
+    annotations_df = update_category_id(output_csv_path, classification_file)
+
+    discrepancies = compare_annotations(output_csv_path, classification_file)
+    if discrepancies:
+        print("Discrepancies found in the following files:")
+        for file in discrepancies:
+            print(file)
+    else:
+        print("No discrepancies found.")
+
+    # Output the total number of 0s, 1s, and 2s in the annotations.csv
+    category_counts = annotations_df['category_id'].value_counts()
+    print("Final category counts:\n", category_counts)
 

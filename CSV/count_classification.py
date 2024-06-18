@@ -1,15 +1,15 @@
 import os
 import pandas as pd
 
-def count_images_in_subgroups(base_dir):
-    counts = {'Benign': 0, 'Malignant': 0, 'Normal': 0}
-    for classification in counts.keys():
-        class_dir = os.path.join(base_dir, classification)
-        if os.path.exists(class_dir):
-            counts[classification] = len([f for f in os.listdir(class_dir) if os.path.isfile(os.path.join(class_dir, f))])
-        else:
-            print(f"Directory {class_dir} does not exist.")
-    return counts
+def count_images_in_csv(csv_file):
+    df = pd.read_csv(csv_file)
+    counts = df['category_id'].value_counts().to_dict()
+    # Initialize counts for all categories
+    counts = {0: counts.get(0, 0), 1: counts.get(1, 0), 2: counts.get(2, 0)}
+    # Map numerical categories to their names
+    category_mapping = {0: 'Benign', 1: 'Malignant', 2: 'Normal'}
+    named_counts = {category_mapping[key]: value for key, value in counts.items()}
+    return named_counts
 
 def display_counts(train_counts, valid_counts, test_counts):
     total_counts = {key: train_counts[key] + valid_counts[key] + test_counts[key] for key in train_counts.keys()}
@@ -35,14 +35,14 @@ def display_counts(train_counts, valid_counts, test_counts):
     print(f"|          |   total    | {sum(total_counts.values())}         |")
 
 if __name__ == "__main__":
-    train_dir = '../../data/train'
-    valid_dir = '../../data/valid'
-    test_dir = '../../data/test'
+    train_csv = '../../data/train_annotations.csv'
+    valid_csv = '../../data/valid_annotations.csv'
+    test_csv = '../../data/test_annotations.csv'
 
-    # Count images in train, valid, and test subgroups
-    train_counts = count_images_in_subgroups(train_dir)
-    valid_counts = count_images_in_subgroups(valid_dir)
-    test_counts = count_images_in_subgroups(test_dir)
+    # Count images in train, valid, and test CSV files
+    train_counts = count_images_in_csv(train_csv)
+    valid_counts = count_images_in_csv(valid_csv)
+    test_counts = count_images_in_csv(test_csv)
 
     # Display the counts
     display_counts(train_counts, valid_counts, test_counts)

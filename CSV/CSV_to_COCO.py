@@ -46,7 +46,11 @@ def csv_to_coco(csv_file, image_dir, output_file):
     print(f"COCO JSON file saved at: {output_file}")
 
 if __name__ == "__main__":
-    csv_file = './data/annotations.csv'
-    image_dir = './data/images'
-    output_file = './data/ground_truth.json'
-    csv_to_coco(csv_file, image_dir, output_file)
+    base_dir = '../../data'
+    subsets = ['train', 'valid', 'test']
+    
+    for subset in subsets:
+        csv_file = os.path.join(base_dir, f'{subset}_annotations.csv')
+        image_dir = os.path.join(base_dir, subset)
+        output_file = os.path.join(base_dir, f'{subset}_annotations.json')
+        csv_to_coco(csv_file, image_dir, output_file)

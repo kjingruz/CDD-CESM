@@ -2,8 +2,7 @@ import os
 from detectron2.engine import DefaultTrainer, hooks
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
-from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
-from detectron2.data import detection_utils as utils
+from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader, build_detection_test_loader
 from detectron2.structures import BoxMode
 import imgaug.augmenters as iaa
 import torch
@@ -13,48 +12,9 @@ import numpy as np
 from detectron2.data import DatasetMapper
 import copy
 from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-from detectron2.data import build_detection_test_loader
+from detectron2.data.datasets import register_coco_instances
 
 torch.multiprocessing.set_sharing_strategy('file_system')
-
-def load_dataset(image_dir):
-    categories = ["benign", "malignant", "normal"]
-    category_id_mapping = { "benign": 0, "malignant": 1, "normal": 2 }
-    
-    dataset_dicts = []
-    for category in categories:
-        category_path = os.path.join(image_dir, category)
-        if not os.path.exists(category_path):
-            print(f"Directory {category_path} does not exist, skipping.")
-            continue
-        
-        for filename in os.listdir(category_path):
-            if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                continue
-            
-            record = {}
-            filepath = os.path.join(category_path, filename)
-            height, width = utils.read_image(filepath).shape[:2]
-            
-            record["file_name"] = filepath
-            record["image_id"] = len(dataset_dicts)
-            record["height"] = height
-            record["width"] = width
-            record["annotations"] = [{
-                "bbox": [0, 0, width, height],  # No specific bbox provided, default to the whole image
-                "bbox_mode": BoxMode.XYWH_ABS,
-                "segmentation": [],  # No segmentation provided
-                "category_id": category_id_mapping[category],
-                "iscrowd": 0,
-                "area": width * height
-            }]
-            dataset_dicts.append(record)
-    
-    return dataset_dicts
-
-def register_dataset(name, image_dir):
-    DatasetCatalog.register(name, lambda: load_dataset(image_dir))
-    MetadataCatalog.get(name).set(thing_classes=["Benign", "Malignant", "Normal"])
 
 def get_imgaug_transforms():
     return iaa.Sequential([
@@ -146,7 +106,9 @@ def main():
         print(f"Exception during training: {e}")
 
 if __name__ == "__main__":
-    register_dataset("my_dataset_train", "../../data/train")
-    register_dataset("my_dataset_val", "../../data/valid")
-    register_dataset("my_dataset_test", "../../data/test")
+    # Register datasets from COCO JSON annotations
+    register_coco_instances("my_dataset_train", {}, "../../data/train_annotations.json", "../../data/images")
+    register_coco_instances("my_dataset_val", {}, "../../data/valid_annotations.json", "../../data/images")
+    register_coco_instances("my_dataset_test", {}, "../../data/test_annotations.json", "../../data/images")
+    
     main()
