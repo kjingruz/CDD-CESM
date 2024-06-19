@@ -14,10 +14,13 @@ def csv_to_coco(csv_file, image_dir, output_file):
             {"id": 3, "name": "Normal"},
         ],
     }
-    
+
+    category_id_mapping = {0: "benign", 1: "malignant", 2: "normal"}
+
     for idx, row in df.iterrows():
         image_id = idx
-        filename = row['file_name']
+        subfolder = category_id_mapping[int(row["Classification"])]
+        filename = os.path.join(subfolder, row['file_name'])
         width = row['width']
         height = row['height']
         bbox = json.loads(row['bbox'])
@@ -47,7 +50,7 @@ def csv_to_coco(csv_file, image_dir, output_file):
     print(f"COCO JSON file saved at: {output_file}")
 
 if __name__ == "__main__":
-    base_dir = '../../data'
+    base_dir = '/Users/kjingruz/Library/CloudStorage/OneDrive-McMasterUniversity/Research/Saha/data'
     subsets = ['train', 'valid', 'test']
     
     for subset in subsets:
